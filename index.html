@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nuvio Provider Tester</title>
+<style>
+  :root {
+    --bg: #0d0d12;
+    --surface: #17171f;
+    --border: #2a2a38;
+    --accent: #7c5cfc;
+    --text: #e8e8f0;
+    --muted: #666880;
+    --ok: #3ecf8e;
+    --warn: #f5a623;
+    --dead: #ff4d6d;
+    --skip: #444460;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+
+  header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header span { color: var(--muted); font-size: 13px; }
+
+  .main { display: flex; height: calc(100vh - 57px); }
+
+  .sidebar { width: 280px; flex-shrink: 0; border-right: 1px solid var(--border); overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  input, select {
+    width: 100%; padding: 8px 10px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px; color: var(--text);
+    font-size: 13px; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+
+  .presets { display: flex; flex-direction: column; gap: 6px; }
+  .preset-btn {
+    padding: 7px 10px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 12px; cursor: pointer;
+    text-align: left; transition: border-color 0.15s;
+  }
+  .preset-btn:hover { border-color: var(--accent); }
+  .preset-btn strong { display: block; font-size: 13px; }
+  .preset-btn span { color: var(--muted); }
+
+  .search-btn {
+    width: 100%; padding: 10px; background: var(--accent); border: none;
+    border-radius: 8px; color: white; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: opacity 0.15s;
+  }
+  .search-btn:hover { opacity: 0.85; }
+  .search-btn:disabled { opacity: 0.4; cursor: default; }
+
+  .content { flex: 1; overflow-y: auto; padding: 16px 20px; }
+
+  .stats-bar {
+    display: flex; gap: 16px; margin-bottom: 16px; padding: 10px 14px;
+    background: var(--surface); border-radius: 8px; border: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .stat { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-ok { background: var(--ok); }
+  .dot-empty { background: var(--warn); }
+  .dot-error { background: var(--dead); }
+  .dot-pending { background: var(--muted); }
+
+  #progress-bar { height: 2px; background: var(--border); border-radius: 2px; margin-bottom: 16px; }
+  #progress-fill { height: 100%; background: var(--accent); border-radius: 2px; width: 0%; transition: width 0.2s; }
+
+  .results-grid { display: flex; flex-direction: column; gap: 8px; }
+
+  .provider-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    overflow: hidden; transition: border-color 0.15s;
+  }
+  .provider-card.ok { border-color: var(--ok); }
+  .provider-card.error { border-color: rgba(255,77,109,0.4); }
+  .provider-card.dead { opacity: 0.4; }
+
+  .card-header {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    cursor: pointer; user-select: none;
+  }
+  .card-header:hover { background: rgba(255,255,255,0.03); }
+
+  .status-badge {
+    font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .badge-ok { background: rgba(62,207,142,0.15); color: var(--ok); }
+  .badge-empty { background: rgba(245,166,35,0.15); color: var(--warn); }
+  .badge-error { background: rgba(255,77,109,0.15); color: var(--dead); }
+  .badge-dead { background: rgba(68,68,96,0.3); color: var(--muted); }
+  .badge-skip { background: rgba(68,68,96,0.3); color: var(--muted); }
+  .badge-pending { background: rgba(124,92,252,0.15); color: var(--accent); }
+
+  .provider-name { font-weight: 600; font-size: 13px; flex: 1; }
+  .stream-count { color: var(--muted); font-size: 12px; margin-left: auto; }
+  .chevron { color: var(--muted); font-size: 10px; transition: transform 0.15s; }
+  .chevron.open { transform: rotate(180deg); }
+
+  .card-body { display: none; padding: 0 14px 12px; }
+  .card-body.visible { display: block; }
+
+  .error-msg { color: var(--dead); font-size: 12px; padding: 6px 0; }
+  .skip-msg { color: var(--muted); font-size: 12px; padding: 6px 0; }
+
+  .stream-item {
+    padding: 8px 10px; margin-top: 6px; background: rgba(0,0,0,0.3);
+    border-radius: 6px; border: 1px solid var(--border);
+  }
+  .stream-url {
+    font-family: monospace; font-size: 11px; color: var(--accent);
+    word-break: break-all; margin-bottom: 4px;
+  }
+  .stream-url a { color: var(--accent); text-decoration: none; }
+  .stream-url a:hover { text-decoration: underline; }
+  .stream-meta { font-size: 11px; color: var(--muted); }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-state h2 { font-size: 15px; margin-bottom: 8px; color: var(--text); }
+
+  .spinner {
+    display: inline-block; width: 10px; height: 10px;
+    border: 2px solid var(--accent); border-top-color: transparent;
+    border-radius: 50%; animation: spin 0.6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .filter-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .filter-btn {
+    padding: 5px 10px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; color: var(--muted); font-size: 12px; cursor: pointer;
+  }
+  .filter-btn.active { border-color: var(--accent); color: var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Nuvio Provider Tester</h1>
+  <span id="header-sub">65 providers · Fan-out search</span>
+</header>
+
+<div class="main">
+  <div class="sidebar">
+    <div>
+      <label>Content type</label>
+      <select id="type">
+        <option value="movie">Movie</option>
+        <option value="tv">TV Series</option>
+      </select>
+    </div>
+    <div>
+      <label>TMDB ID</label>
+      <input id="tmdbId" type="text" placeholder="e.g. 155" value="155">
+    </div>
+    <div id="tv-fields" style="display:none; display:flex; flex-direction:column; gap:10px;">
+      <div>
+        <label>Season</label>
+        <input id="season" type="number" value="1" min="1">
+      </div>
+      <div>
+        <label>Episode</label>
+        <input id="episode" type="number" value="1" min="1">
+      </div>
+    </div>
+
+    <div>
+      <label>Quick picks</label>
+      <div class="presets" id="presets">
+        <button class="preset-btn" data-tmdb="155" data-type="movie">
+          <strong>The Dark Knight</strong>
+          <span>Movie · TMDB 155</span>
+        </button>
+        <button class="preset-btn" data-tmdb="238" data-type="movie">
+          <strong>The Godfather</strong>
+          <span>Movie · TMDB 238</span>
+        </button>
+        <button class="preset-btn" data-tmdb="603" data-type="movie">
+          <strong>The Matrix</strong>
+          <span>Movie · TMDB 603</span>
+        </button>
+        <button class="preset-btn" data-tmdb="1396" data-type="tv" data-season="1" data-episode="1">
+          <strong>Breaking Bad S1E1</strong>
+          <span>TV · TMDB 1396</span>
+        </button>
+        <button class="preset-btn" data-tmdb="1399" data-type="tv" data-season="1" data-episode="1">
+          <strong>Game of Thrones S1E1</strong>
+          <span>TV · TMDB 1399</span>
+        </button>
+        <button class="preset-btn" data-tmdb="37854" data-type="tv" data-season="1" data-episode="1">
+          <strong>One Piece S1E1</strong>
+          <span>Anime · TMDB 37854</span>
+        </button>
+        <button class="preset-btn" data-tmdb="31911" data-type="tv" data-season="1" data-episode="1">
+          <strong>Naruto S1E1</strong>
+          <span>Anime · TMDB 31911</span>
+        </button>
+      </div>
+    </div>
+
+    <button class="search-btn" id="searchBtn" onclick="startSearch()">
+      Search All Providers
+    </button>
+  </div>
+
+  <div class="content">
+    <div id="empty-state" class="empty-state">
+      <h2>Pick a title or enter TMDB ID</h2>
+      <p>Results will stream in from all 65 providers as they respond</p>
+    </div>
+
+    <div id="results-container" style="display:none">
+      <div id="stats-bar" class="stats-bar">
+        <div class="stat"><div class="dot dot-ok"></div><span id="stat-ok">0 got streams</span></div>
+        <div class="stat"><div class="dot dot-empty"></div><span id="stat-empty">0 empty</span></div>
+        <div class="stat"><div class="dot dot-error"></div><span id="stat-error">0 errors</span></div>
+        <div class="stat"><div class="dot dot-pending"></div><span id="stat-pending">0 pending</span></div>
+      </div>
+      <div id="progress-bar"><div id="progress-fill"></div></div>
+
+      <div class="filter-bar">
+        <button class="filter-btn active" data-filter="all" onclick="setFilter('all', this)">All</button>
+        <button class="filter-btn" data-filter="ok" onclick="setFilter('ok', this)">Got Streams</button>
+        <button class="filter-btn" data-filter="empty" onclick="setFilter('empty', this)">Empty</button>
+        <button class="filter-btn" data-filter="error" onclick="setFilter('error', this)">Errors</button>
+      </div>
+
+      <div class="results-grid" id="results-grid"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentFilter = 'all';
+let resultMap = {};
+let totalProviders = 65;
+let counts = { ok: 0, empty: 0, error: 0, pending: 65 };
+let activeES = null;
+
+document.getElementById('type').addEventListener('change', function() {
+  document.getElementById('tv-fields').style.display = this.value === 'tv' ? 'flex' : 'none';
+});
+
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('tmdbId').value = btn.dataset.tmdb;
+    document.getElementById('type').value = btn.dataset.type;
+    document.getElementById('type').dispatchEvent(new Event('change'));
+    if (btn.dataset.season) document.getElementById('season').value = btn.dataset.season;
+    if (btn.dataset.episode) document.getElementById('episode').value = btn.dataset.episode;
+    startSearch();
+  });
+});
+
+function setFilter(f, el) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  Object.keys(resultMap).forEach(id => updateCardVisibility(id));
+}
+
+function updateCardVisibility(id) {
+  const card = document.getElementById('card-' + id);
+  if (!card) return;
+  const status = card.dataset.status;
+  card.style.display = (currentFilter === 'all' || currentFilter === status) ? 'block' : 'none';
+}
+
+function updateStats() {
+  document.getElementById('stat-ok').textContent = counts.ok + ' got streams';
+  document.getElementById('stat-empty').textContent = counts.empty + ' empty';
+  document.getElementById('stat-error').textContent = counts.error + ' errors';
+  document.getElementById('stat-pending').textContent = counts.pending + ' pending';
+  const done = totalProviders - counts.pending;
+  document.getElementById('progress-fill').style.width = (done / totalProviders * 100) + '%';
+}
+
+function renderCard(data) {
+  const { provider, providerId, status, streams, error } = data;
+  let badgeClass = 'badge-' + status;
+  let badgeText = status === 'ok' ? `${streams.length} stream${streams.length !== 1 ? 's' : ''}` :
+                  status === 'empty' ? 'empty' :
+                  status === 'dead' ? 'dead' :
+                  status === 'skip' ? 'skip' :
+                  status === 'error' ? 'error' : status;
+
+  let bodyHtml = '';
+  if (streams && streams.length > 0) {
+    bodyHtml = streams.map(s => `
+      <div class="stream-item">
+        <div class="stream-url"><a href="${escHtml(s.url)}" target="_blank">${escHtml(s.url.slice(0,80))}${s.url.length > 80 ? '…' : ''}</a></div>
+        <div class="stream-meta">${s.name || ''} ${s.quality ? '· ' + s.quality : ''} ${s.language ? '· ' + s.language : ''}</div>
+      </div>
+    `).join('');
+  } else if (error) {
+    const cls = (status === 'dead' || status === 'skip') ? 'skip-msg' : 'error-msg';
+    bodyHtml = `<div class="${cls}">${escHtml(error)}</div>`;
+  }
+
+  const existing = document.getElementById('card-' + providerId);
+  if (existing) {
+    existing.dataset.status = status;
+    existing.className = `provider-card ${status === 'ok' ? 'ok' : status === 'error' ? 'error' : status === 'dead' || status === 'skip' ? 'dead' : ''}`;
+    existing.querySelector('.status-badge').className = `status-badge ${badgeClass}`;
+    existing.querySelector('.status-badge').textContent = badgeText;
+    const sc = existing.querySelector('.stream-count');
+    if (sc) sc.remove();
+    existing.querySelector('.card-body').innerHTML = bodyHtml;
+    updateCardVisibility(providerId);
+    return;
+  }
+
+  const card = document.createElement('div');
+  card.id = 'card-' + providerId;
+  card.dataset.status = status;
+  card.className = `provider-card ${status === 'ok' ? 'ok' : status === 'error' ? 'error' : status === 'dead' || status === 'skip' ? 'dead' : ''}`;
+  card.innerHTML = `
+    <div class="card-header" onclick="toggleCard('${providerId}')">
+      <div class="provider-name">${escHtml(provider)}</div>
+      <span class="status-badge ${badgeClass}">${escHtml(badgeText)}</span>
+      <span class="chevron" id="chev-${providerId}">▼</span>
+    </div>
+    <div class="card-body ${status === 'ok' ? 'visible' : ''}" id="body-${providerId}">
+      ${bodyHtml}
+    </div>
+  `;
+  document.getElementById('results-grid').appendChild(card);
+  updateCardVisibility(providerId);
+}
+
+function toggleCard(id) {
+  const body = document.getElementById('body-' + id);
+  const chev = document.getElementById('chev-' + id);
+  body.classList.toggle('visible');
+  chev.classList.toggle('open');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderPending(id, name) {
+  const card = document.createElement('div');
+  card.id = 'card-' + id;
+  card.dataset.status = 'pending';
+  card.className = 'provider-card';
+  card.innerHTML = `
+    <div class="card-header">
+      <div class="provider-name">${escHtml(name)}</div>
+      <span class="status-badge badge-pending"><span class="spinner"></span></span>
+    </div>
+  `;
+  document.getElementById('results-grid').appendChild(card);
+}
+
+async function startSearch() {
+  const tmdbId = document.getElementById('tmdbId').value.trim();
+  const type = document.getElementById('type').value;
+  const season = document.getElementById('season').value;
+  const episode = document.getElementById('episode').value;
+
+  if (!tmdbId) return;
+
+  if (activeES) { activeES.close(); activeES = null; }
+
+  // Reset
+  resultMap = {};
+  counts = { ok: 0, empty: 0, error: 0, pending: 65 };
+  document.getElementById('results-grid').innerHTML = '';
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('results-container').style.display = 'block';
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('searchBtn').disabled = true;
+  document.getElementById('header-sub').textContent = `Searching TMDB ${tmdbId} (${type})…`;
+
+  // Load provider list and pre-render pending cards
+  let providers = [];
+  try {
+    const r = await fetch('/providers');
+    providers = await r.json();
+    totalProviders = providers.length;
+  } catch (e) {
+    console.error(e);
+    document.getElementById('searchBtn').disabled = false;
+    return;
+  }
+
+  providers.forEach(p => renderPending(p.id, p.name));
+  counts.pending = totalProviders;
+  updateStats();
+
+  let url = `/search?tmdbId=${encodeURIComponent(tmdbId)}&type=${type}`;
+  if (type === 'tv') url += `&season=${season}&episode=${episode}`;
+
+  const es = new EventSource(url);
+  activeES = es;
+
+  es.addEventListener('result', (e) => {
+    const data = JSON.parse(e.data);
+    const prev = resultMap[data.providerId];
+
+    if (!prev || prev === 'pending') {
+      if (data.status === 'ok') counts.ok++;
+      else if (data.status === 'empty') counts.empty++;
+      else counts.error++;
+      counts.pending--;
+    }
+
+    resultMap[data.providerId] = data.status;
+    renderCard(data);
+    updateStats();
+  });
+
+  es.addEventListener('done', () => {
+    es.close();
+    activeES = null;
+    document.getElementById('searchBtn').disabled = false;
+    document.getElementById('header-sub').textContent = `Done · ${counts.ok} providers returned streams`;
+  });
+
+  es.onerror = () => {
+    es.close();
+    activeES = null;
+    document.getElementById('searchBtn').disabled = false;
+    document.getElementById('header-sub').textContent = 'Connection error — is the server running?';
+  };
+}
+</script>
+</body>
+</html>
